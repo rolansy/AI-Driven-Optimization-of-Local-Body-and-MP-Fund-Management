@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import sqlite3
 import spacy
+from spacy.matcher import PhraseMatcher
 
 app = Flask(__name__)
 
@@ -24,23 +25,30 @@ def classify_project(user_input):
     
     # Example keyword-based mapping (extendable)
     sectors = {
-        "infrastructure": ["road", "bridge", "water supply", "electricity"],
-        "education": ["school", "library", "college", "university"],
-        "healthcare": ["hospital", "clinic", "ambulance", "health center"],
-        "public welfare": ["park", "community hall", "waste management"]
+        "infrastructure": ["road", "bridge", "water supply", "electricity", "sewage system", "public transport"],
+        "education": ["school", "library", "college", "university", "training center"],
+        "healthcare": ["hospital", "clinic", "ambulance", "health center", "medical camp"],
+        "public welfare": ["park", "community hall", "waste management", "shelter", "food distribution"]
     }
     
     project_name = None
     project_sector = "others"
     
+    # Create a PhraseMatcher object
+    matcher = PhraseMatcher(nlp.vocab)
+    
+    # Add patterns to the matcher
     for sector, keywords in sectors.items():
-        for word in doc:
-            if word.text in keywords:
-                project_name = word.text
-                project_sector = sector
-                break
-        if project_name:
-            break
+        patterns = [nlp(keyword) for keyword in keywords]
+        matcher.add(sector, patterns)
+    
+    # Find matches in the user input
+    matches = matcher(doc)
+    
+    if matches:
+        match_id, start, end = matches[0]
+        project_sector = nlp.vocab.strings[match_id]
+        project_name = doc[start:end].text
     
     return project_name, project_sector
 
