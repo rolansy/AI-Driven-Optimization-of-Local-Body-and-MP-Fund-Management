@@ -1,4 +1,3 @@
-<!-- filepath: /D:/PROJECTS/Mini Project/AI-Driven Optimization of Local Body and MP Fund [index.html](http://_vscodecontentref_/2) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,30 +5,85 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project Portal</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body>
     <h1>Submit Your Project Request</h1>
     <form id="projectForm">
         <textarea id="projectInput" rows="4" cols="50" placeholder="Enter your project request here..."></textarea><br>
+        <div id="map"></div>
+        <input type="hidden" id="latitude" name="latitude">
+        <input type="hidden" id="longitude" name="longitude">
         <button type="submit">Submit</button>
     </form>
     <h2>Project List</h2>
     <ul id="projectList"></ul>
+    <button id="clearDatabase">Clear Database</button>
+    <a href="/map">View Projects on Map</a>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
+        const map = L.map('map').setView([20.5937, 78.9629], 5); // Centered on India
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let marker;
+
+        map.on('click', function(e) {
+            const { lat, lng } = e.latlng;
+            if (marker) {
+                marker.setLatLng(e.latlng);
+            } else {
+                marker = L.marker(e.latlng).addTo(map);
+            }
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lng;
+        });
+
         document.getElementById('projectForm').addEventListener('submit', function(event) {
             event.preventDefault();
             const input = document.getElementById('projectInput').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            console.log('Submitting:', { text: input, latitude: parseFloat(latitude), longitude: parseFloat(longitude) }); // Debugging statement
             fetch('/submit', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ text: input })
+                body: JSON.stringify({ text: input, latitude: parseFloat(latitude), longitude: parseFloat(longitude) })
             })
             .then(response => response.json())
             .then(data => {
                 alert(data.message);
                 loadProjects();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while submitting the project request.');
+            });
+        });
+
+        document.getElementById('clearDatabase').addEventListener('click', function() {
+            fetch('/clear', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadProjects();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while clearing the database.');
             });
         });
 
@@ -44,6 +98,10 @@
                     li.textContent = `${project.name} (${project.sector}) - ${project.count}`;
                     projectList.appendChild(li);
                 });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while loading the projects.');
             });
         }
 
