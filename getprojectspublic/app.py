@@ -48,7 +48,7 @@ def classify_project(user_input):
     if matches:
         match_id, start, end = matches[0]
         project_sector = nlp.vocab.strings[match_id]
-        project_name = doc[start:end].text
+        project_name = doc[start:end].lemma_  # Use lemma_ to get the base form
     
     return project_name, project_sector
 
