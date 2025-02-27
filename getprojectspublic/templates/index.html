@@ -95,7 +95,7 @@
                 projectList.innerHTML = '';
                 data.forEach(project => {
                     const li = document.createElement('li');
-                    li.textContent = `${project.name} (${project.sector}) - ${project.count}`;
+                    li.textContent = `${project.name} (${project.sector}) - ${project.count} [${project.area}]`;
                     projectList.appendChild(li);
                 });
             })
