@@ -2,18 +2,23 @@ from flask import Flask, request, jsonify, render_template, send_from_directory
 import sqlite3
 import spacy
 from spacy.matcher import PhraseMatcher
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
 
 app = Flask(__name__)
 
 # Load NLP model (Using spaCy as an example, replace with API if needed)
 nlp = spacy.load("en_core_web_sm")
 
+# Initialize geolocator
+geolocator = Nominatim(user_agent="project_portal")
+
 # Database setup
 def init_db():
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS projects 
-                 (id INTEGER PRIMARY KEY, name TEXT, sector TEXT, count INTEGER, latitude REAL, longitude REAL)''')
+                 (id INTEGER PRIMARY KEY, name TEXT, sector TEXT, count INTEGER, latitude REAL, longitude REAL, area TEXT)''')
     conn.commit()
     conn.close()
 
@@ -52,18 +57,36 @@ def classify_project(user_input):
     
     return project_name, project_sector
 
+# Get area name based on latitude and longitude
+def get_area_name(latitude, longitude):
+    location = geolocator.reverse((latitude, longitude), exactly_one=True)
+    return location.address if location else "Unknown"
+
 # Add or update a project in the database
 def add_or_update_project(name, sector, latitude, longitude):
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
-    c.execute("SELECT * FROM projects WHERE name = ? AND sector = ? AND latitude = ? AND longitude = ?", (name, sector, latitude, longitude))
-    project = c.fetchone()
     
-    if project:
-        c.execute("UPDATE projects SET count = count + 1 WHERE name = ? AND sector = ? AND latitude = ? AND longitude = ?", (name, sector, latitude, longitude))
-    else:
-        c.execute("INSERT INTO projects (name, sector, count, latitude, longitude) VALUES (?, ?, 1, ?, ?)", (name, sector, latitude, longitude))
+    # Define a close radius (e.g., 1 km)
+    close_radius = 10.0  # in kilometers
     
+    # Check for existing projects within the close radius
+    c.execute("SELECT * FROM projects WHERE name = ? AND sector = ?", (name, sector))
+    projects = c.fetchall()
+    
+    for project in projects:
+        project_lat = project[4]
+        project_lon = project[5]
+        distance = geodesic((latitude, longitude), (project_lat, project_lon)).km
+        if distance <= close_radius:
+            c.execute("UPDATE projects SET count = count + 1 WHERE id = ?", (project[0],))
+            conn.commit()
+            conn.close()
+            return
+    
+    # If no close project is found, insert a new project
+    area_name = get_area_name(latitude, longitude)
+    c.execute("INSERT INTO projects (name, sector, count, latitude, longitude, area) VALUES (?, ?, 1, ?, ?, ?)", (name, sector, latitude, longitude, area_name))
     conn.commit()
     conn.close()
 
@@ -96,7 +119,7 @@ def get_projects():
     projects = c.fetchall()
     conn.close()
     
-    return jsonify([{"name": row[1], "sector": row[2], "count": row[3], "latitude": row[4], "longitude": row[5]} for row in projects])
+    return jsonify([{"name": row[1], "sector": row[2], "count": row[3], "latitude": row[4], "longitude": row[5], "area": row[6]} for row in projects])
 
 # API Endpoint to clear the database
 @app.route("/clear", methods=["POST"])
