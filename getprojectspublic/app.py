@@ -13,7 +13,7 @@ def init_db():
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS projects 
-                 (id INTEGER PRIMARY KEY, name TEXT, sector TEXT, count INTEGER)''')
+                 (id INTEGER PRIMARY KEY, name TEXT, sector TEXT, count INTEGER, latitude REAL, longitude REAL)''')
     conn.commit()
     conn.close()
 
@@ -53,16 +53,16 @@ def classify_project(user_input):
     return project_name, project_sector
 
 # Add or update a project in the database
-def add_or_update_project(name, sector):
+def add_or_update_project(name, sector, latitude, longitude):
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
-    c.execute("SELECT * FROM projects WHERE name = ? AND sector = ?", (name, sector))
+    c.execute("SELECT * FROM projects WHERE name = ? AND sector = ? AND latitude = ? AND longitude = ?", (name, sector, latitude, longitude))
     project = c.fetchone()
     
     if project:
-        c.execute("UPDATE projects SET count = count + 1 WHERE name = ? AND sector = ?", (name, sector))
+        c.execute("UPDATE projects SET count = count + 1 WHERE name = ? AND sector = ? AND latitude = ? AND longitude = ?", (name, sector, latitude, longitude))
     else:
-        c.execute("INSERT INTO projects (name, sector, count) VALUES (?, ?, 1)", (name, sector))
+        c.execute("INSERT INTO projects (name, sector, count, latitude, longitude) VALUES (?, ?, 1, ?, ?)", (name, sector, latitude, longitude))
     
     conn.commit()
     conn.close()
@@ -72,13 +72,17 @@ def add_or_update_project(name, sector):
 def submit_request():
     data = request.get_json()
     user_input = data.get("text", "")
+    latitude = data.get("latitude", None)
+    longitude = data.get("longitude", None)
     
-    if not user_input:
-        return jsonify({"error": "No input provided"}), 400
+    print(f"Received data: {data}")  # Debugging statement
+    
+    if not user_input or latitude is None or longitude is None:
+        return jsonify({"error": "Incomplete input provided"}), 400
     
     project_name, sector = classify_project(user_input)
     if project_name:
-        add_or_update_project(project_name, sector)
+        add_or_update_project(project_name, sector, latitude, longitude)
         return jsonify({"message": "Project request recorded", "category": sector, "project": project_name})
     else:
         return jsonify({"error": "No valid project found"}), 400
@@ -92,12 +96,26 @@ def get_projects():
     projects = c.fetchall()
     conn.close()
     
-    return jsonify([{"name": row[1], "sector": row[2], "count": row[3]} for row in projects])
+    return jsonify([{"name": row[1], "sector": row[2], "count": row[3], "latitude": row[4], "longitude": row[5]} for row in projects])
+
+# API Endpoint to clear the database
+@app.route("/clear", methods=["POST"])
+def clear_database():
+    conn = sqlite3.connect("projects.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM projects")
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Database cleared"})
 
 # Serve the HTML template
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/map")
+def map_view():
+    return render_template("map.html")
 
 @app.route('/static/<path:filename>')
 def send_static(filename):
