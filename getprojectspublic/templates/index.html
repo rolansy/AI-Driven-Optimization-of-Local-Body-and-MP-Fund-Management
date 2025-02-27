@@ -1,0 +1,53 @@
+<!-- filepath: /D:/PROJECTS/Mini Project/AI-Driven Optimization of Local Body and MP Fund [index.html](http://_vscodecontentref_/2) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Submit Your Project Request</h1>
+    <form id="projectForm">
+        <textarea id="projectInput" rows="4" cols="50" placeholder="Enter your project request here..."></textarea><br>
+        <button type="submit">Submit</button>
+    </form>
+    <h2>Project List</h2>
+    <ul id="projectList"></ul>
+    <script>
+        document.getElementById('projectForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const input = document.getElementById('projectInput').value;
+            fetch('/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: input })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadProjects();
+            });
+        });
+
+        function loadProjects() {
+            fetch('/projects')
+            .then(response => response.json())
+            .then(data => {
+                const projectList = document.getElementById('projectList');
+                projectList.innerHTML = '';
+                data.forEach(project => {
+                    const li = document.createElement('li');
+                    li.textContent = `${project.name} (${project.sector}) - ${project.count}`;
+                    projectList.appendChild(li);
+                });
+            });
+        }
+
+        loadProjects();
+    </script>
+</body>
+</html>
