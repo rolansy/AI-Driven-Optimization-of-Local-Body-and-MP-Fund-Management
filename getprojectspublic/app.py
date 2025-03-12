@@ -4,6 +4,8 @@ import spacy
 from spacy.matcher import PhraseMatcher
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
+from sklearn.cluster import KMeans
+import numpy as np
 
 app = Flask(__name__)
 
@@ -67,22 +69,34 @@ def add_or_update_project(name, sector, latitude, longitude):
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
     
-    # Define a close radius (e.g., 1 km)
-    close_radius = 10.0  # in kilometers
+    # Define a close radius (e.g., 5 km)
+    close_radius = 5.0  # in kilometers
     
     # Check for existing projects within the close radius
     c.execute("SELECT * FROM projects WHERE name = ? AND sector = ?", (name, sector))
     projects = c.fetchall()
     
+    close_projects = []
     for project in projects:
         project_lat = project[4]
         project_lon = project[5]
         distance = geodesic((latitude, longitude), (project_lat, project_lon)).km
         if distance <= close_radius:
-            c.execute("UPDATE projects SET count = count + 1 WHERE id = ?", (project[0],))
-            conn.commit()
-            conn.close()
-            return
+            close_projects.append(project)
+    
+    if close_projects:
+        # Use KMeans clustering to group projects into common areas
+        locations = np.array([(project[4], project[5]) for project in close_projects])
+        kmeans = KMeans(n_clusters=1).fit(locations)
+        centroid = kmeans.cluster_centers_[0]
+        centroid_lat, centroid_lon = centroid
+        
+        # Update the project location point as the centroid of the cluster
+        centroid_area = get_area_name(centroid_lat, centroid_lon)
+        c.execute("UPDATE projects SET count = count + 1, latitude = ?, longitude = ?, area = ? WHERE id = ?", (centroid_lat, centroid_lon, centroid_area, close_projects[0][0]))
+        conn.commit()
+        conn.close()
+        return
     
     # If no close project is found, insert a new project
     area_name = get_area_name(latitude, longitude)
