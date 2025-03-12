@@ -26,9 +26,21 @@
         fetch('/projects')
         .then(response => response.json())
         .then(data => {
+            const clusters = {};
             data.forEach(project => {
-                const marker = L.marker([project.latitude, project.longitude]).addTo(map);
-                marker.bindPopup(`<b>${project.name}</b><br>${project.sector}<br>Count: ${project.count}`);
+                const key = `${project.latitude},${project.longitude}`;
+                if (!clusters[key]) {
+                    clusters[key] = [];
+                }
+                clusters[key].push(project);
+            });
+
+            Object.keys(clusters).forEach(key => {
+                const [lat, lon] = key.split(',').map(Number);
+                const projects = clusters[key];
+                const popupContent = projects.map(p => `${p.name} (${p.sector}) - ${p.count}`).join('<br>');
+                const marker = L.marker([lat, lon]).addTo(map);
+                marker.bindPopup(popupContent);
             });
         });
     </script>
