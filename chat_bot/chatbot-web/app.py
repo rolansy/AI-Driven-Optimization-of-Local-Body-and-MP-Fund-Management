@@ -18,6 +18,7 @@ client = Anthropic(api_key=ANTHROPIC_API_KEY)
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
+#trial
 conversation = []  # Store the chat history
 
 @app.route("/")
