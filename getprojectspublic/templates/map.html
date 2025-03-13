@@ -6,15 +6,44 @@
     <title>Project Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 0;
+            text-align: center;
+        }
+        main {
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
         #map {
             height: 600px;
             width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Projects on Map</h1>
-    <div id="map"></div>
+    <header>
+        <h1>Projects on Map</h1>
+    </header>
+    <main>
+        <div id="map"></div>
+    </main>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
         const map = L.map('map').setView([20.5937, 78.9629], 5); // Centered on India
@@ -26,19 +55,21 @@
         fetch('/projects')
         .then(response => response.json())
         .then(data => {
-            const clusters = {};
-            data.forEach(project => {
-                const key = `${project.latitude},${project.longitude}`;
-                if (!clusters[key]) {
-                    clusters[key] = [];
-                }
-                clusters[key].push(project);
+            const { centroids, projects } = data;
+
+            centroids.forEach(centroid => {
+                const lat = centroid.latitude;
+                const lon = centroid.longitude;
+                const clusterPoints = centroid.cluster_points.split(';').map(point => point.split(',').map(Number));
+                const popupContent = clusterPoints.map(point => `(${point[0]}, ${point[1]})`).join('<br>');
+                const marker = L.marker([lat, lon]).addTo(map);
+                marker.bindPopup(popupContent);
             });
 
-            Object.keys(clusters).forEach(key => {
-                const [lat, lon] = key.split(',').map(Number);
-                const projects = clusters[key];
-                const popupContent = projects.map(p => `${p.name} (${p.sector}) - ${p.count}`).join('<br>');
+            projects.forEach(project => {
+                const lat = project.latitude;
+                const lon = project.longitude;
+                const popupContent = `${project.name} (${project.sector}) - ${project.count} [${project.area}]`;
                 const marker = L.marker([lat, lon]).addTo(map);
                 marker.bindPopup(popupContent);
             });
