@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MLA Fund Management</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="js/corruption-detection.js"></script>
+    <style>
+        /* CSS Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            color: #3498db;
+            border-left: 4px solid #3498db;
+            padding-left: 10px;
+            margin-top: 30px;
+        }
+
+        .mla-details, .visualization, .transaction-details, .form-container, .info-panel {
+            margin-bottom: 30px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        #mlaInfo p, .info-panel p {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        #fundChart {
+            width: 100%;
+            height: 350px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            margin-top: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #3498db;
+            color: white;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        table tr:hover {
+            background-color: #e9e9e9;
+        }
+
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .back-button, .submit-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .back-button:hover, .submit-button:hover {
+            background-color: #2980b9;
+        }
+
+        .x-axis path, .x-axis line {
+            stroke: #7f8c8d;
+        }
+
+        .x-axis text {
+            font-size: 12px;
+            fill: #7f8c8d;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+        }
+
+        /* Dashboard Styles - Only visible when appropriate */
+        #dashboardPage {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MLA Fund Management System</h1>
+        
+        <!-- Form Page -->
+        <div id="formPage">
+            <div class="form-container">
+                <h2>Request Project Funds</h2>
+                <form id="fundForm">
+                    <div class="form-group">
+                        <label for="mlaName">MLA Name:</label>
+                        <input type="text" id="mlaName" name="mlaName" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="project">Project Description:</label>
+                        <textarea id="project" name="project" rows="4" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="amount">Amount (in ₹):</label>
+                        <input type="number" id="amount" name="amount" min="1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="submit" class="submit-button">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="info-panel">
+                <h2>About MLA Funds</h2>
+                <p>Each MLA is allocated ₹50,000,000 for development projects in their constituency. Use this system to request and track fund utilization.</p>
+                <p>The system provides visualization of fund allocation and usage, and helps maintain transparency in the process.</p>
+            </div>
+        </div>
+        
+        <!-- Dashboard Page -->
+        <div id="dashboardPage">
+            <div class="mla-details">
+                <h2>MLA Details</h2>
+                <div id="mlaInfo"></div>
+            </div>
+
+            <div class="visualization">
+                <h2>Fund Utilization</h2>
+                <div id="fundChart"></div>
+            </div>
+
+            <div class="transaction-details">
+                <h2>Transaction Details</h2>
+                <div id="transactionInfo"></div>
+            </div>
+
+            <div class="corruption-alerts" id="alerts"></div>
+            
+            <button class="back-button" id="backButton">Back to Form</button>
+        </div>
+    </div>
+    
+    <script>
+        //----------- Fund Database Management -----------
+        const fundDB = {
+            // Initialize with total fund of ₹50,000,000
+            totalFund: 50000000,
+            transactions: [],
+            
+            // Add a new transaction
+            addTransaction: function(mlaName, amount, project) {
+                // Check if amount is valid
+                if (amount <= 0) {
+                    return {
+                        valid: false,
+                        message: "Amount must be greater than zero"
+                    };
+                }
+                
+                // Check if sufficient funds available
+                if (this.getUsedAmount() + amount > this.totalFund) {
+                    return {
+                        valid: false,
+                        message: "Insufficient funds. Available amount: ₹" + 
+                            (this.totalFund - this.getUsedAmount()).toLocaleString()
+                    };
+                }
+                
+                // Add transaction
+                const transaction = {
+                    id: this.transactions.length + 1,
+                    mlaName: mlaName,
+                    amount: amount,
+                    project: project,
+                    date: new Date().toISOString().split('T')[0] // Current date in YYYY-MM-DD format
+                };
+                
+                this.transactions.push(transaction);
+                
+                // Display transaction details
+                this.displayTransactionDetails();
+                
+                return {
+                    valid: true,
+                    message: "Transaction added successfully"
+                };
+            },
+            
+            // Get total used amount
+            getUsedAmount: function() {
+                return this.transactions.reduce((total, transaction) => total + transaction.amount, 0);
+            },
+            
+            // Get available amount
+            getAvailableAmount: function() {
+                return this.totalFund - this.getUsedAmount();
+            },
+            
+            // Display transaction details
+            displayTransactionDetails: function() {
+                const transactionInfo = document.getElementById('transactionInfo');
+                
+                if (this.transactions.length === 0) {
+                    transactionInfo.innerHTML = "<p>No transactions found.</p>";
+                    return;
+                }
+                
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>MLA Name</th>
+                                <th>Project</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                this.transactions.forEach(transaction => {
+                    html += `
+                        <tr>
+                            <td>${transaction.id}</td>
+                            <td>${transaction.mlaName}</td>
+                            <td>${transaction.project}</td>
+                            <td>₹${transaction.amount.toLocaleString()}</td>
+                            <td>${transaction.date}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                        </tbody>
+                    </table>
+                    <div class="summary">
+                        <p><strong>Total Fund:</strong> ₹${this.totalFund.toLocaleString()}</p>
+                        <p><strong>Used Amount:</strong> ₹${this.getUsedAmount().toLocaleString()}</p>
+                        <p><strong>Available Amount:</strong> ₹${this.getAvailableAmount().toLocaleString()}</p>
+                    </div>
+                `;
+                
+                transactionInfo.innerHTML = html;
+            }
+        };
+
+        //----------- Fund Visualization -----------
+        function updateVisualization() {
+            const width = 600;
+            const height = 300;
+            const margin = { top: 20, right: 20, bottom: 30, left: 80 };
+            
+            // Clear previous chart
+            d3.select("#fundChart").html("");
+            
+            // Create SVG
+            const svg = d3.select("#fundChart")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+            
+            // Data preparation
+            const usedAmount = fundDB.getUsedAmount();
+            const availableAmount = fundDB.getAvailableAmount();
+            const data = [
+                { label: "Used", value: usedAmount, color: "#FF4136" },  // Red
+                { label: "Available", value: availableAmount, color: "#2ECC40" }  // Green
+            ];
+            
+            // Percentage calculations
+            const usedPercentage = (usedAmount / fundDB.totalFund * 100).toFixed(1);
+            const availablePercentage = (availableAmount / fundDB.totalFund * 100).toFixed(1);
+            
+            // Create horizontal bar chart
+            const barHeight = 60;
+            const chartG = svg.append("g")
+                .attr("transform", `translate(${margin.left}, ${margin.top + 50})`);
+            
+            // X scale
+            const x = d3.scaleLinear()
+                .domain([0, fundDB.totalFund])
+                .range([0, width - margin.left - margin.right]);
+            
+            // Add bars
+            chartG.selectAll(".bar")
+                .data(data)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", 0)
+                .attr("y", (d, i) => i * (barHeight + 20))
+                .attr("width", d => x(d.value))
+                .attr("height", barHeight)
+                .attr("fill", d => d.color);
+            
+            // Add labels
+            chartG.selectAll(".label")
+                .data(data)
+                .enter()
+                .append("text")
+                .attr("class", "label")
+                .attr("x", -10)
+                .attr("y", (d, i) => i * (barHeight + 20) + barHeight / 2)
+                .attr("text-anchor", "end")
+                .attr("dominant-baseline", "middle")
+                .attr("font-weight", "bold")
+                .text(d => d.label);
+            
+            // Add values and percentages
+            chartG.selectAll(".value")
+                .data(data)
+                .enter()
+                .append("text")
+                .attr("class", "value")
+                .attr("x", d => Math.max(x(d.value) / 2, 50))
+                .attr("y", (d, i) => i * (barHeight + 20) + barHeight / 2)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("fill", "white")
+                .attr("font-weight", "bold")
+                .text((d, i) => {
+                    const percentage = i === 0 ? usedPercentage : availablePercentage;
+                    return `₹${d.value.toLocaleString()} (${percentage}%)`;
+                });
+            
+            // Add X axis
+            const xAxis = d3.axisBottom(x)
+                .tickFormat(d => `₹${d/1000000}M`);
+            
+            chartG.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0, ${2 * barHeight + 20})`)
+                .call(xAxis);
+            
+            // Add title
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", margin.top)
+                .attr("text-anchor", "middle")
+                .attr("font-size", "16px")
+                .attr("font-weight", "bold")
+                .text("Fund Utilization (Total: ₹" + fundDB.totalFund.toLocaleString() + ")");
+            
+            // Add pie chart
+            const radius = Math.min(width, height) / 5;
+            const pieG = svg.append("g")
+                .attr("transform", `translate(${width - radius - margin.right}, ${height - radius - margin.bottom})`);
+            
+            const pie = d3.pie()
+                .value(d => d.value);
+            
+            const arc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(radius);
+            
+            const pieData = pie(data);
+            
+            pieG.selectAll("path")
+                .data(pieData)
+                .enter()
+                .append("path")
+                .attr("d", arc)
+                .attr("fill", d => d.data.color);
+            
+            // Add percentage text to pie slices (if large enough)
+            pieG.selectAll(".pie-label")
+                .data(pieData)
+                .enter()
+                .append("text")
+                .attr("class", "pie-label")
+                .attr("transform", d => {
+                    // Only show text if slice is big enough
+                    if (d.endAngle - d.startAngle < 0.3) return "translate(-1000,-1000)"; // Hide small slices
+                    const centroid = arc.centroid(d);
+                    return `translate(${centroid[0]}, ${centroid[1]})`;
+                })
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("fill", "white")
+                .attr("font-size", "12px")
+                .attr("font-weight", "bold")
+                .text((d, i) => i === 0 ? `${usedPercentage}%` : `${availablePercentage}%`);
+        }
+
+        //----------- Form submission and page navigation -----------
+        // Form submission handler
+        document.getElementById('fundForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const mlaName = document.getElementById('mlaName').value;
+            const project = document.getElementById('project').value.trim();
+            const amount = parseFloat(document.getElementById('amount').value);
+            
+            // Validate project type
+            if (!marketRates[project]) {
+                alert("Please enter one of the following projects: " + Object.keys(marketRates).join(", "));
+                return;
+            }
+            
+            // Check for corruption
+            const corruptionAnalysis = detectCorruption(amount, project);
+            
+            // Display MLA info
+            document.getElementById('mlaInfo').innerHTML = `
+                <p><strong>MLA Name:</strong> ${mlaName}</p>
+                <p><strong>Project:</strong> ${project}</p>
+                <p><strong>Amount Requested:</strong> ₹${amount.toLocaleString()}</p>
+                <p><strong>Market Reference Rate:</strong> ₹${corruptionAnalysis.marketRate.toLocaleString()}</p>
+                <p><strong>Deviation Score:</strong> ${corruptionAnalysis.zScore}</p>
+            `;
+            
+            // Display corruption alert
+            if (corruptionAnalysis.isCorrupt) {
+                document.getElementById('alerts').innerHTML = `
+                    <div class="alert alert-danger">
+                        <h3>⚠️ Corruption Alert!</h3>
+                        <p>${corruptionAnalysis.message}</p>
+                        <p>Market Rate: ₹${corruptionAnalysis.marketRate.toLocaleString()}</p>
+                        <p>Requested Amount: ₹${amount.toLocaleString()}</p>
+                        <p>Z-Score: ${corruptionAnalysis.zScore}</p>
+                    </div>
+                `;
+            } else {
+                document.getElementById('alerts').innerHTML = `
+                    <div class="alert" style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;">
+                        <p>✅ ${corruptionAnalysis.message}</p>
+                    </div>
+                `;
+            }
+            
+            // Process transaction
+            const result = fundDB.addTransaction(mlaName, amount, project);
+            if (!result.valid) {
+                document.getElementById('alerts').innerHTML += `
+                    <div class="alert alert-danger">${result.message}</div>
+                `;
+                return;
+            }
+            
+            // Update visualization
+            updateVisualization();
+            
+            // Switch to dashboard page
+            document.getElementById('formPage').style.display = 'none';
+            document.getElementById('dashboardPage').style.display = 'block';
+        });
+        
+        // Back button handler
+        document.getElementById('backButton').addEventListener('click', function() {
+            // Switch to form page
+            document.getElementById('dashboardPage').style.display = 'none';
+            document.getElementById('formPage').style.display = 'block';
+        });
+    </script>
+</body>
+</html>
