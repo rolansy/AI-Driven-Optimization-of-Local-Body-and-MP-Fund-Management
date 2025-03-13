@@ -7,26 +7,106 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 0;
+            text-align: center;
+        }
+        main {
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        form {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #555;
+        }
         #map {
             height: 400px;
             width: 100%;
             margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            background: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+        #clearDatabase {
+            background-color: #e74c3c;
+            margin-top: 10px;
+        }
+        #clearDatabase:hover {
+            background-color: #c0392b;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            form {
+                padding: 10px;
+            }
+            button {
+                width: 100%;
+                margin-top: 10px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Submit Your Project Request</h1>
-    <form id="projectForm">
-        <textarea id="projectInput" rows="4" cols="50" placeholder="Enter your project request here..."></textarea><br>
-        <div id="map"></div>
-        <input type="hidden" id="latitude" name="latitude">
-        <input type="hidden" id="longitude" name="longitude">
-        <button type="submit">Submit</button>
-    </form>
-    <h2>Project List</h2>
-    <ul id="projectList"></ul>
-    <button id="clearDatabase">Clear Database</button>
-    <a href="/map">View Projects on Map</a>
+    <header>
+        <h1>Submit Your Project Request</h1>
+    </header>
+    <main>
+        <form id="projectForm">
+            <textarea id="projectInput" rows="4" cols="50" placeholder="Enter your project request here..."></textarea><br>
+            <div id="map"></div>
+            <input type="hidden" id="latitude" name="latitude">
+            <input type="hidden" id="longitude" name="longitude">
+            <button type="submit">Submit</button>
+        </form>
+        <h2>Project List</h2>
+        <ul id="projectList"></ul>
+        <button id="clearDatabase">Clear Database</button>
+        <a href="/map">View Projects on Map</a>
+    </main>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
         const map = L.map('map').setView([20.5937, 78.9629], 5); // Centered on India
@@ -93,7 +173,7 @@
             .then(data => {
                 const projectList = document.getElementById('projectList');
                 projectList.innerHTML = '';
-                data.forEach(project => {
+                data.projects.forEach(project => {
                     const li = document.createElement('li');
                     li.textContent = `${project.name} (${project.sector}) - ${project.count} [${project.area}]`;
                     projectList.appendChild(li);
