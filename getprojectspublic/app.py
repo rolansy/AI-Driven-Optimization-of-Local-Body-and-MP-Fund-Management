@@ -21,6 +21,10 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS projects 
                  (id INTEGER PRIMARY KEY, name TEXT, sector TEXT, count INTEGER, latitude REAL, longitude REAL, area TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS centroids 
+                 (id INTEGER PRIMARY KEY, latitude REAL, longitude REAL, area TEXT, cluster_points TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS cluster_points 
+                 (id INTEGER PRIMARY KEY, project_id INTEGER, latitude REAL, longitude REAL)''')
     conn.commit()
     conn.close()
 
@@ -73,7 +77,7 @@ def add_or_update_project(name, sector, latitude, longitude):
     close_radius = 5.0  # in kilometers
     
     # Check for existing projects within the close radius
-    c.execute("SELECT * FROM projects WHERE name = ? AND sector = ?", (name, sector))
+    c.execute("SELECT * FROM projects")
     projects = c.fetchall()
     
     close_projects = []
@@ -93,14 +97,36 @@ def add_or_update_project(name, sector, latitude, longitude):
         
         # Update the project location point as the centroid of the cluster
         centroid_area = get_area_name(centroid_lat, centroid_lon)
-        c.execute("UPDATE projects SET count = count + 1, latitude = ?, longitude = ?, area = ? WHERE id = ?", (centroid_lat, centroid_lon, centroid_area, close_projects[0][0]))
+        cluster_points = ";".join([f"{project[4]},{project[5]}" for project in close_projects])
+        
+        # Check if the centroid already exists
+        c.execute("SELECT * FROM centroids WHERE latitude = ? AND longitude = ?", (centroid_lat, centroid_lon))
+        centroid_row = c.fetchone()
+        
+        if centroid_row:
+            # Update the existing centroid
+            c.execute("UPDATE centroids SET cluster_points = ? WHERE id = ?", (cluster_points, centroid_row[0]))
+        else:
+            # Insert a new centroid
+            c.execute("INSERT INTO centroids (latitude, longitude, area, cluster_points) VALUES (?, ?, ?, ?)", 
+                      (centroid_lat, centroid_lon, centroid_area, cluster_points))
+        
+        # Update the cluster points
+        for project in close_projects:
+            c.execute("INSERT INTO cluster_points (project_id, latitude, longitude) VALUES (?, ?, ?)", 
+                      (project[0], project[4], project[5]))
+        
         conn.commit()
         conn.close()
         return
     
     # If no close project is found, insert a new project
     area_name = get_area_name(latitude, longitude)
-    c.execute("INSERT INTO projects (name, sector, count, latitude, longitude, area) VALUES (?, ?, 1, ?, ?, ?)", (name, sector, latitude, longitude, area_name))
+    c.execute("INSERT INTO projects (name, sector, count, latitude, longitude, area) VALUES (?, ?, 1, ?, ?, ?)", 
+              (name, sector, latitude, longitude, area_name))
+    project_id = c.lastrowid
+    c.execute("INSERT INTO cluster_points (project_id, latitude, longitude) VALUES (?, ?, ?)", 
+              (project_id, latitude, longitude))
     conn.commit()
     conn.close()
 
@@ -129,11 +155,16 @@ def submit_request():
 def get_projects():
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
-    c.execute("SELECT * FROM projects ORDER BY count DESC")
+    c.execute("SELECT * FROM centroids ORDER BY id DESC")
+    centroids = c.fetchall()
+    c.execute("SELECT * FROM projects ORDER BY id DESC")
     projects = c.fetchall()
     conn.close()
     
-    return jsonify([{"name": row[1], "sector": row[2], "count": row[3], "latitude": row[4], "longitude": row[5], "area": row[6]} for row in projects])
+    return jsonify({
+        "centroids": [{"latitude": row[1], "longitude": row[2], "area": row[3], "cluster_points": row[4]} for row in centroids],
+        "projects": [{"name": row[1], "sector": row[2], "count": row[3], "latitude": row[4], "longitude": row[5], "area": row[6]} for row in projects]
+    })
 
 # API Endpoint to clear the database
 @app.route("/clear", methods=["POST"])
@@ -141,6 +172,8 @@ def clear_database():
     conn = sqlite3.connect("projects.db")
     c = conn.cursor()
     c.execute("DELETE FROM projects")
+    c.execute("DELETE FROM centroids")
+    c.execute("DELETE FROM cluster_points")
     conn.commit()
     conn.close()
     return jsonify({"message": "Database cleared"})
