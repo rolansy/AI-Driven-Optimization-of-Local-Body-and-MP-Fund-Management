@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Priority Prediction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='priority_styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Predict Project Priority</h1>
+    </header>
+    <main>
+        <button id="resetButton">Reset</button>
+        <div id="drop_zone">Drag and drop a PDF file here or click to upload</div>
+        <div id="projectDetails"></div>
+        <div id="priorityList"></div>
+    </main>
+    <script>
+        const dropZone = document.getElementById('drop_zone');
+        const resetButton = document.getElementById('resetButton');
+
+        dropZone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropZone.style.borderColor = '#000';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#ccc';
+        });
+
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                uploadPDF(files[0]);
+            }
+        });
+
+        dropZone.addEventListener('click', () => {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'application/pdf';
+            fileInput.onchange = (event) => {
+                const files = event.target.files;
+                if (files.length > 0) {
+                    uploadPDF(files[0]);
+                }
+            };
+            fileInput.click();
+        });
+
+        resetButton.addEventListener('click', () => {
+            fetch('/clear_output', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    document.getElementById('projectDetails').innerHTML = '';
+                    fetchPriorityList();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while resetting the output.');
+            });
+        });
+
+        function uploadPDF(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload_pdf', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    const rank = data.rank;
+                    const score = data.score;
+                    const projectDetails = data.project_details;
+                    document.getElementById('projectDetails').innerHTML = `
+                        <h2>Processed Project Details</h2>
+                        <p><strong>Project Name:</strong> ${projectDetails.Project_Name}</p>
+                        <p><strong>Category:</strong> ${projectDetails.Category}</p>
+                        <p><strong>Estimated Cost (INR):</strong> ${projectDetails.Estimated_Cost}</p>
+                        <p><strong>Start Year:</strong> ${projectDetails.Start_Year}</p>
+                        <p><strong>End Year:</strong> ${projectDetails.End_Year}</p>
+                        <p><strong>Duration (Years):</strong> ${projectDetails.Duration}</p>
+                        <p><strong>Priority Score:</strong> ${score}</p>
+                        <p><strong>Rank:</strong> ${rank}</p>
+                    `;
+                    fetchPriorityList();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while uploading the PDF.');
+            });
+        }
+
+        function fetchPriorityList() {
+            fetch('/prioritized_projects')
+            .then(response => response.json())
+            .then(data => {
+                let priorityListHTML = '<h2>Priority Project Plans List</h2><table><thead><tr><th>#</th><th>Project Name</th><th>Priority Score</th></tr></thead><tbody>';
+                data.forEach((project, index) => {
+                    priorityListHTML += `<tr><td>${index + 1}</td><td>${project.Project_Name}</td><td>${project.Priority_Score}</td></tr>`;
+                });
+                priorityListHTML += '</tbody></table>';
+                document.getElementById('priorityList').innerHTML = priorityListHTML;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while fetching the priority list.');
+            });
+        }
+
+        // Initial fetch of priority list
+        fetchPriorityList();
+    </script>
+</body>
+</html>
