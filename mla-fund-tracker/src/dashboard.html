@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>MLA Fund Management</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
     <script src="js/corruption-detection.js"></script>
     <style>
         /* CSS Styles */
@@ -334,10 +335,10 @@
             // Clear previous chart
             d3.select("#fundChart").html("");
             
-            // Create SVG
+            // Update SVG width to accommodate the shifted pie chart
             const svg = d3.select("#fundChart")
                 .append("svg")
-                .attr("width", width)
+                .attr("width", width + 150) // Increased width by 150px to make room for pie chart
                 .attr("height", height);
             
             // Data preparation
@@ -425,11 +426,11 @@
             // Add pie chart
             const radius = Math.min(width, height) / 5;
             const pieG = svg.append("g")
-                .attr("transform", `translate(${width - radius - margin.right}, ${height - radius - margin.bottom})`);
-            
+                .attr("transform", `translate(${width + 80}, ${height/2})`); // Increased x-position by adding 80px
+
             const pie = d3.pie()
                 .value(d => d.value);
-            
+
             const arc = d3.arc()
                 .innerRadius(0)
                 .outerRadius(radius);
@@ -494,7 +495,7 @@
             if (corruptionAnalysis.isCorrupt) {
                 document.getElementById('alerts').innerHTML = `
                     <div class="alert alert-danger">
-                        <h3>⚠️ Corruption Alert!</h3>
+                        <h3>⚠️Alert!</h3>
                         <p>${corruptionAnalysis.message}</p>
                         <p>Market Rate: ₹${corruptionAnalysis.marketRate.toLocaleString()}</p>
                         <p>Requested Amount: ₹${amount.toLocaleString()}</p>
