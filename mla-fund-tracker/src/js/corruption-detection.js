@@ -1,46 +1,49 @@
+// Market rates for different project types
 const marketRates = {
-    "Road Construction": 750000,
-    "School Renovation": 180000,
-    "Water Supply": 100000,
-    "Street Lighting": 130000,
-    "Park Development": 400000
+    "Road Construction": 1000000,
+    "School Building": 2000000,
+    "Hospital Equipment": 1500000,
+    "Water Supply": 800000,
+    "Park Development": 500000
 };
 
-function calculateZScore(amount, projectType) {
-    const marketRate = marketRates[projectType];
-    if (!marketRate) return null;
-
-    const deviation = amount - marketRate;
-    const threshold = marketRate * 0.2; // 20% as standard deviation
-    return deviation / threshold;
+// Standard deviations for each project type (20% of market rate)
+const standardDeviations = {};
+for (let project in marketRates) {
+    standardDeviations[project] = marketRates[project] * 0.20;
 }
 
-function detectCorruption(amount, projectType) {
-    const zScore = calculateZScore(amount, projectType);
+// Set placeholder for project input field
+const validProjects = Object.keys(marketRates).join(", ");
+document.getElementById('project').placeholder = `Enter one of: ${validProjects}`;
+
+function detectCorruption(amount, project) {
+    const marketRate = marketRates[project];
+    const stdDev = standardDeviations[project];
+
+    // Calculate z-score using jStat
+    const zScore = jStat.zscore(amount, marketRate, stdDev);
     
-    if (zScore === null) {
-        return {
-            isCorrupt: false,
-            message: "Project type not found in reference data",
-            zScore: 0,
-            marketRate: 0
-        };
-    }
+    // Round z-score to 2 decimal places
+    const roundedZScore = Math.round(zScore * 100) / 100;
+
+    const result = {
+        isCorrupt: false,
+        marketRate: marketRate,
+        zScore: roundedZScore,
+        message: ""
+    };
 
     if (Math.abs(zScore) > 2) {
-        const percentageDeviation = ((amount - marketRates[projectType]) / marketRates[projectType] * 100).toFixed(2);
-        return {
-            isCorrupt: true,
-            message: `WARNING: Amount deviates ${percentageDeviation}% from market rate`,
-            zScore: zScore.toFixed(2),
-            marketRate: marketRates[projectType]
-        };
+        result.isCorrupt = true;
+        if (amount > marketRate) {
+            result.message = "Warning: Amount significantly higher than market rate!";
+        } else {
+            result.message = "Warning: Amount significantly lower than market rate!";
+        }
+    } else {
+        result.message = "Transaction appears normal";
     }
 
-    return {
-        isCorrupt: false,
-        message: "No abnormal deviation detected",
-        zScore: zScore.toFixed(2),
-        marketRate: marketRates[projectType]
-    };
+    return result;
 }
