@@ -1,13 +1,20 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
-import sqlite3
+import pandas as pd
+import numpy as np
 import spacy
 from spacy.matcher import PhraseMatcher
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
-from sklearn.cluster import KMeans
-import numpy as np
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from sklearn.ensemble import RandomForestRegressor
+import fitz  # PyMuPDF
+import os
+import re
+import json
+import google.generativeai as genai
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # Load NLP model (Using spaCy as an example, replace with API if needed)
 nlp = spacy.load("en_core_web_sm")
@@ -15,135 +22,160 @@ nlp = spacy.load("en_core_web_sm")
 # Initialize geolocator
 geolocator = Nominatim(user_agent="project_portal")
 
-# Database setup
-def init_db():
-    conn = sqlite3.connect("projects.db")
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS projects 
-                 (id INTEGER PRIMARY KEY, name TEXT, sector TEXT, count INTEGER, latitude REAL, longitude REAL, area TEXT)''')
-    conn.commit()
-    conn.close()
+# Configure Google Generative AI
+genai.configure(api_key="AIzaSyBYQ5SgfI8mtSnJftWmZduop8TTuDpdzWQ")
 
-init_db()
+# Load project plans CSV
+df = pd.read_csv("prioritisation/project_plans.csv")
+df_prioritized = df.copy()
 
-# NLP-based project classification
-def classify_project(user_input):
-    doc = nlp(user_input.lower())
+# Define category weightage
+category_weightage = {
+    "Healthcare": 10,
+    "Infrastructure": 9,
+    "Education": 8,
+    "Water & Sanitation": 8,
+    "Energy": 7,
+    "Transport": 6,
+    "Environment": 5,
+    "Social Welfare": 4,
+    "Tourism": 3,
+    "IT & Digital Services": 3
+}
+
+# Calculate priority scores
+def calculate_priority_scores():
+    global df_prioritized
+    df_prioritized["Category_Weight"] = df_prioritized["Category"].map(category_weightage).fillna(0)
+    scaler = MinMaxScaler()
+    df_prioritized["Duration_Score"] = 1 - scaler.fit_transform(df_prioritized[["Duration"]].copy())
+    df_prioritized["Cost_Score"] = 1 - scaler.fit_transform(df_prioritized[["Estimated_Cost (INR)"]].copy())
+    label_encoder = LabelEncoder()
+    df_prioritized["Category_Encoded"] = label_encoder.fit_transform(df_prioritized["Category"])
+    df_prioritized["Priority_Score"] = df_prioritized["Category_Weight"] * 0.5 + df_prioritized["Duration_Score"] * 0.25 + df_prioritized["Cost_Score"] * 0.25
+    df_prioritized = df_prioritized.sort_values(by="Priority_Score", ascending=False)
+    df_prioritized.to_csv("prioritisation/prioritized_project_plans.csv", index=False)
+
+# Extract text from PDF
+def extract_text_from_pdf(pdf_path):
+    try:
+        doc = fitz.open(pdf_path)  # Using fitz instead of pymupdf
+        text = "\n".join([page.get_text("text") for page in doc])
+        return text
+    except Exception as e:
+        print(f"Error reading PDF: {e}")
+        return ""
+
+# Extract project details from text using Google API
+def extract_project_details(report_text):
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    prompt = f"""Extract the following details from the given project report:
+    - Project_Name
+    - Category
+    - Estimated_Cost (INR)
+    - Start_Year
+    - End_Year
+    - Duration (Years)
     
-    # Example keyword-based mapping (extendable)
-    sectors = {
-        "infrastructure": ["road", "bridge", "water supply", "electricity", "sewage system", "public transport"],
-        "education": ["school", "library", "college", "university", "training center"],
-        "healthcare": ["hospital", "clinic", "ambulance", "health center", "medical camp"],
-        "public welfare": ["park", "community hall", "waste management", "shelter", "food distribution"]
+    Report: {report_text}
+    
+    Provide the response in **valid** JSON format, with no extra explanations."""
+    
+    response = model.generate_content(prompt)
+    print("Raw Gemini API response:", response.text)  # Debugging
+
+    try:
+        # Extract JSON from response using regex
+        json_text = re.search(r"\{.*\}", response.text, re.DOTALL)
+        if json_text:
+            return json.loads(json_text.group())  # Parse valid JSON
+        else:
+            print("No JSON detected in response.")
+            return {}
+    except json.JSONDecodeError:
+        print("Error parsing response from Gemini API.")
+        return {}
+
+# Add project from PDF
+def add_project_from_pdf(pdf_path):
+    global df, df_prioritized  # Ensure we modify the global dataframes
+    report_text = extract_text_from_pdf(pdf_path)
+    if not report_text:
+        print("No text extracted from PDF.")
+        return None, None, None
+
+    project_details = extract_project_details(report_text)
+    
+    if not project_details:
+        print("No valid project details extracted.")
+        return None, None, None
+
+    new_row = {
+        "Project_Name": project_details.get("Project_Name", "Unknown"),
+        "Category": project_details.get("Category", "Unknown"),
+        "Estimated_Cost (INR)": project_details.get("Estimated_Cost (INR)", 0),
+        "Start_Year": project_details.get("Start_Year", 0),
+        "End_Year": project_details.get("End_Year", 0),
+        "Duration": project_details.get("Duration (Years)", 0)
     }
-    
-    project_name = None
-    project_sector = "others"
-    
-    # Create a PhraseMatcher object
-    matcher = PhraseMatcher(nlp.vocab)
-    
-    # Add patterns to the matcher
-    for sector, keywords in sectors.items():
-        patterns = [nlp(keyword) for keyword in keywords]
-        matcher.add(sector, patterns)
-    
-    # Find matches in the user input
-    matches = matcher(doc)
-    
-    if matches:
-        match_id, start, end = matches[0]
-        project_sector = nlp.vocab.strings[match_id]
-        project_name = doc[start:end].lemma_  # Use lemma_ to get the base form
-    
-    return project_name, project_sector
 
-# Get area name based on latitude and longitude
-def get_area_name(latitude, longitude):
-    location = geolocator.reverse((latitude, longitude), exactly_one=True)
-    return location.address if location else "Unknown"
+    # Add new row to project_plans.csv
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)  # Fix for Pandas 2.0+
+    df.to_csv("prioritisation/project_plans.csv", index=False)  # Save updated project plans CSV
 
-# Add or update a project in the database
-def add_or_update_project(name, sector, latitude, longitude):
-    conn = sqlite3.connect("projects.db")
-    c = conn.cursor()
-    
-    # Define a close radius (e.g., 5 km)
-    close_radius = 5.0  # in kilometers
-    
-    # Check for existing projects within the close radius
-    c.execute("SELECT * FROM projects WHERE name = ? AND sector = ?", (name, sector))
-    projects = c.fetchall()
-    
-    close_projects = []
-    for project in projects:
-        project_lat = project[4]
-        project_lon = project[5]
-        distance = geodesic((latitude, longitude), (project_lat, project_lon)).km
-        if distance <= close_radius:
-            close_projects.append(project)
-    
-    if close_projects:
-        # Use KMeans clustering to group projects into common areas
-        locations = np.array([(project[4], project[5]) for project in close_projects])
-        kmeans = KMeans(n_clusters=1).fit(locations)
-        centroid = kmeans.cluster_centers_[0]
-        centroid_lat, centroid_lon = centroid
-        
-        # Update the project location point as the centroid of the cluster
-        centroid_area = get_area_name(centroid_lat, centroid_lon)
-        c.execute("UPDATE projects SET count = count + 1, latitude = ?, longitude = ?, area = ? WHERE id = ?", (centroid_lat, centroid_lon, centroid_area, close_projects[0][0]))
-        conn.commit()
-        conn.close()
-        return
-    
-    # If no close project is found, insert a new project
-    area_name = get_area_name(latitude, longitude)
-    c.execute("INSERT INTO projects (name, sector, count, latitude, longitude, area) VALUES (?, ?, 1, ?, ?, ?)", (name, sector, latitude, longitude, area_name))
-    conn.commit()
-    conn.close()
+    # Recalculate priority scores and reorder projects
+    calculate_priority_scores()
 
-# API Endpoint for user input
-@app.route("/submit", methods=["POST"])
-def submit_request():
-    data = request.get_json()
-    user_input = data.get("text", "")
-    latitude = data.get("latitude", None)
-    longitude = data.get("longitude", None)
-    
-    print(f"Received data: {data}")  # Debugging statement
-    
-    if not user_input or latitude is None or longitude is None:
-        return jsonify({"error": "Incomplete input provided"}), 400
-    
-    project_name, sector = classify_project(user_input)
-    if project_name:
-        add_or_update_project(project_name, sector, latitude, longitude)
-        return jsonify({"message": "Project request recorded", "category": sector, "project": project_name})
-    else:
-        return jsonify({"error": "No valid project found"}), 400
+    # Print the score and rank of the new project
+    new_project_rank = df_prioritized.reset_index().index[df_prioritized["Project_Name"] == new_row["Project_Name"]][0] + 1
+    new_project_score = df_prioritized[df_prioritized["Project_Name"] == new_row["Project_Name"]]["Priority_Score"].values[0]
+    print(f"New project added successfully! Its score is: {new_project_score} and its rank in the priority list is: {new_project_rank}")
+    return new_project_rank, new_project_score, project_details
 
-# API Endpoint to get project list
-@app.route("/projects", methods=["GET"])
-def get_projects():
-    conn = sqlite3.connect("projects.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM projects ORDER BY count DESC")
-    projects = c.fetchall()
-    conn.close()
-    
-    return jsonify([{"name": row[1], "sector": row[2], "count": row[3], "latitude": row[4], "longitude": row[5], "area": row[6]} for row in projects])
+# API Endpoint to upload PDF and process it
+@app.route("/upload_pdf", methods=["POST"])
+def upload_pdf():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        if file:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(file_path)
+            rank, score, project_details = add_project_from_pdf(file_path)
+            if rank is None or score is None or project_details is None:
+                return jsonify({"error": "Failed to process PDF"}), 500
+            return jsonify({"rank": int(rank), "score": float(score), "project_details": project_details})
+    except Exception as e:
+        print(f"Error processing PDF: {e}")
+        return jsonify({"error": "Internal server error"}), 500
 
-# API Endpoint to clear the database
-@app.route("/clear", methods=["POST"])
-def clear_database():
-    conn = sqlite3.connect("projects.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM projects")
-    conn.commit()
-    conn.close()
-    return jsonify({"message": "Database cleared"})
+# API Endpoint to get prioritized projects
+@app.route("/prioritized_projects", methods=["GET"])
+def get_prioritized_projects():
+    try:
+        df_prioritized = pd.read_csv("prioritisation/prioritized_project_plans.csv")
+        df_prioritized = df_prioritized.replace({np.nan: None})  # Replace NaN with None for JSON serialization
+        projects = df_prioritized.to_dict(orient="records")
+        return jsonify(projects)
+    except Exception as e:
+        print(f"Error fetching prioritized projects: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+# API Endpoint to clear the PDF output
+@app.route("/clear_output", methods=["POST"])
+def clear_output():
+    try:
+        global df, df_prioritized
+        df = pd.read_csv("prioritisation/project_plans.csv")
+        df_prioritized = df.copy()
+        calculate_priority_scores()
+        return jsonify({"message": "Output cleared successfully"})
+    except Exception as e:
+        print(f"Error clearing output: {e}")
+        return jsonify({"error": "Internal server error"}), 500
 
 # Serve the HTML template
 @app.route("/")
@@ -154,9 +186,15 @@ def index():
 def map_view():
     return render_template("map.html")
 
+@app.route("/priority")
+def priority_view():
+    return render_template("priority.html")
+
 @app.route('/static/<path:filename>')
 def send_static(filename):
     return send_from_directory('static', filename)
 
 if __name__ == "__main__":
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'])
     app.run(debug=True)
