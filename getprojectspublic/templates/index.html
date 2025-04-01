@@ -53,7 +53,7 @@
             const input = document.getElementById('projectInput').value;
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
-            console.log('Submitting:', { text: input, latitude: parseFloat(latitude), longitude: parseFloat(longitude) }); // Debugging statement
+
             fetch('/submit', {
                 method: 'POST',
                 headers: {
@@ -63,8 +63,12 @@
             })
             .then(response => response.json())
             .then(data => {
-                alert(data.message);
-                loadProjects();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    alert(data.message);
+                    loadProjects();
+                }
             })
             .catch(error => {
                 console.error('Error:', error);
