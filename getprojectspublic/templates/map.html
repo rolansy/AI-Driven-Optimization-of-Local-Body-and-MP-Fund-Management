@@ -24,25 +24,51 @@
         }).addTo(map);
 
         fetch('/projects')
-        .then(response => response.json())
-        .then(data => {
-            const clusters = {};
-            data.forEach(project => {
-                const key = `${project.latitude},${project.longitude}`;
-                if (!clusters[key]) {
-                    clusters[key] = [];
-                }
-                clusters[key].push(project);
+            .then(response => response.json())
+            .then(data => {
+                const clusters = {};
+                data.forEach(project => {
+                    const key = `${project.latitude},${project.longitude}`;
+                    if (!clusters[key]) {
+                        clusters[key] = [];
+                    }
+                    clusters[key].push(project);
+                });
+
+                Object.keys(clusters).forEach(key => {
+                    const [lat, lon] = key.split(',').map(Number);
+                    const projects = clusters[key];
+                    const popupContent = projects.map(p => `
+                        <div>
+                            <strong>${p.name} (${p.sector})</strong><br>
+                            User Input: ${p.user_input}<br>
+                            <button onclick="generatePDF('${p.id}')">Generate PDF</button>
+                        </div>
+                    `).join('<hr>');
+                    const marker = L.marker([lat, lon]).addTo(map);
+                    marker.bindPopup(popupContent);
+                });
             });
 
-            Object.keys(clusters).forEach(key => {
-                const [lat, lon] = key.split(',').map(Number);
-                const projects = clusters[key];
-                const popupContent = projects.map(p => `${p.name} (${p.sector}) - ${p.count}`).join('<br>');
-                const marker = L.marker([lat, lon]).addTo(map);
-                marker.bindPopup(popupContent);
-            });
-        });
+        function generatePDF(projectId) {
+            fetch(`/generate_pdf/${projectId}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'project_report.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.open(url, '_blank');
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error generating PDF:', error);
+                    alert('An error occurred while generating the PDF.');
+                });
+        }
     </script>
 </body>
 </html>
