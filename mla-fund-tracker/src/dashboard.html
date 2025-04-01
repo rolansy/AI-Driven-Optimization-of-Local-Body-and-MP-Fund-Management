@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>MLA Fund Management</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
     <script src="js/corruption-detection.js"></script>
     <style>
         /* CSS Styles */
@@ -143,7 +142,7 @@
             font-weight: bold;
         }
 
-        .form-group input, .form-group textarea {
+        .form-group input, .form-group textarea, .form-group select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -176,9 +175,22 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="project">Project Description:</label>
-                        <textarea id="project" name="project" rows="4" required></textarea>
+                        <label for="projectType">Project Type:</label>
+                        <select id="projectType" name="projectType" required onchange="showProjectFields()">
+                            <option value="">-- Select Project Type --</option>
+                            <option value="Road Construction">Road Construction</option>
+                            <option value="School Building">School Building</option>
+                            <option value="Hospital Equipment">Hospital Equipment</option>
+                            <option value="Water Supply">Water Supply</option>
+                            <option value="Park Development">Park Development</option>
+                        </select>
                     </div>
+                    
+                    <!-- Dynamic project fields will appear here -->
+                    <div id="dynamicFields"></div>
+                    
+                    <!-- Hidden field to store combined project description -->
+                    <input type="hidden" id="project" name="project">
                     
                     <div class="form-group">
                         <label for="amount">Amount (in ₹):</label>
@@ -195,6 +207,7 @@
                 <h2>About MLA Funds</h2>
                 <p>Each MLA is allocated ₹50,000,000 for development projects in their constituency. Use this system to request and track fund utilization.</p>
                 <p>The system provides visualization of fund allocation and usage, and helps maintain transparency in the process.</p>
+                <p>Providing detailed project descriptions helps in proper evaluation and prevents misallocation of funds.</p>
             </div>
         </div>
         
@@ -222,6 +235,90 @@
     </div>
     
     <script>
+        // Project-specific field definitions
+        const projectFields = {
+            "Road Construction": [
+                { name: "length", label: "Road Length (km)", type: "number", step: "0.01" },
+                { name: "width", label: "Road Width (m)", type: "number", step: "0.1" },
+                { name: "location", label: "Location Details", type: "text" },
+                { name: "surfaceType", label: "Surface Type", type: "select", 
+                  options: ["Asphalt", "Concrete", "Gravel", "Interlocking"] }
+            ],
+            "School Building": [
+                { name: "classrooms", label: "Number of Classrooms", type: "number" },
+                { name: "area", label: "Total Area (sq. m)", type: "number", step: "0.01" },
+                { name: "floors", label: "Number of Floors", type: "number" },
+                { name: "amenities", label: "Amenities", type: "text", 
+                  placeholder: "e.g., Labs, Playground, Library" }
+            ],
+            "Hospital Equipment": [
+                { name: "equipmentType", label: "Equipment Type", type: "text" },
+                { name: "quantity", label: "Quantity", type: "number" },
+                { name: "department", label: "Department", type: "text" },
+                { name: "hospital", label: "Hospital Name", type: "text" },
+                { name: "purpose", label: "Purpose of Equipment", type: "text" }
+            ],
+            "Water Supply": [
+                { name: "coverage", label: "Coverage Area (sq. km)", type: "number", step: "0.01" },
+                { name: "population", label: "Population Served", type: "number" },
+                { name: "source", label: "Source of Water", type: "text" },
+                { name: "pipelineLength", label: "Pipeline Length (km)", type: "number", step: "0.01" },
+                { name: "storage", label: "Storage Capacity (liters)", type: "number" }
+            ],
+            "Park Development": [
+                { name: "parkArea", label: "Total Area (sq. m)", type: "number", step: "0.01" },
+                { name: "parkLocation", label: "Location", type: "text" },
+                { name: "amenities", label: "Planned Amenities", type: "text" },
+                { name: "trees", label: "Number of Trees to Plant", type: "number" },
+                { name: "facilities", label: "Recreation Facilities", type: "text" }
+            ]
+        };
+
+        // Function to show relevant fields based on project type
+        function showProjectFields() {
+            const projectType = document.getElementById('projectType').value;
+            const dynamicFields = document.getElementById('dynamicFields');
+            dynamicFields.innerHTML = '';
+
+            if (!projectType) return;
+
+            const fields = projectFields[projectType];
+            
+            fields.forEach(field => {
+                const fieldGroup = document.createElement('div');
+                fieldGroup.className = 'form-group';
+                
+                const label = document.createElement('label');
+                label.setAttribute('for', field.name);
+                label.textContent = field.label;
+                fieldGroup.appendChild(label);
+                
+                let input;
+                if (field.type === 'select') {
+                    input = document.createElement('select');
+                    field.options.forEach(option => {
+                        const optionEl = document.createElement('option');
+                        optionEl.value = option;
+                        optionEl.textContent = option;
+                        input.appendChild(optionEl);
+                    });
+                } else {
+                    input = document.createElement('input');
+                    input.type = field.type;
+                    if (field.step) input.step = field.step;
+                    if (field.placeholder) input.placeholder = field.placeholder;
+                }
+                
+                input.id = field.name;
+                input.name = field.name;
+                input.className = 'project-field';
+                input.required = true;
+                fieldGroup.appendChild(input);
+                
+                dynamicFields.appendChild(fieldGroup);
+            });
+        }
+
         //----------- Fund Database Management -----------
         const fundDB = {
             // Initialize with total fund of ₹50,000,000
@@ -328,18 +425,21 @@
 
         //----------- Fund Visualization -----------
         function updateVisualization() {
-            const width = 600;
+            // Further increase width to provide more space for the pie chart
+            const width = 800;
             const height = 300;
-            const margin = { top: 20, right: 20, bottom: 30, left: 80 };
+            const margin = { top: 20, right: 50, bottom: 30, left: 80 };
             
             // Clear previous chart
             d3.select("#fundChart").html("");
             
-            // Update SVG width to accommodate the shifted pie chart
+            // Create SVG with increased width
             const svg = d3.select("#fundChart")
                 .append("svg")
-                .attr("width", width + 150) // Increased width by 150px to make room for pie chart
-                .attr("height", height);
+                .attr("width", "100%") // Make SVG responsive
+                .attr("height", height)
+                .attr("viewBox", `0 0 ${width} ${height}`)
+                .attr("preserveAspectRatio", "xMidYMid meet");
             
             // Data preparation
             const usedAmount = fundDB.getUsedAmount();
@@ -423,14 +523,14 @@
                 .attr("font-weight", "bold")
                 .text("Fund Utilization (Total: ₹" + fundDB.totalFund.toLocaleString() + ")");
             
-            // Add pie chart
+            // Add pie chart - moved further to the right
             const radius = Math.min(width, height) / 5;
             const pieG = svg.append("g")
-                .attr("transform", `translate(${width + 80}, ${height/2})`); // Increased x-position by adding 80px
-
+                .attr("transform", `translate(${width - radius + 20}, ${height / 2})`);
+            
             const pie = d3.pie()
                 .value(d => d.value);
-
+            
             const arc = d3.arc()
                 .innerRadius(0)
                 .outerRadius(radius);
@@ -470,17 +570,44 @@
             event.preventDefault();
             
             const mlaName = document.getElementById('mlaName').value;
-            const project = document.getElementById('project').value.trim();
-            const amount = parseFloat(document.getElementById('amount').value);
+            const projectType = document.getElementById('projectType').value;
             
-            // Validate project type
-            if (!marketRates[project]) {
-                alert("Please enter one of the following projects: " + Object.keys(marketRates).join(", "));
+            if (!projectType) {
+                alert("Please select a project type");
                 return;
             }
             
-            // Check for corruption
-            const corruptionAnalysis = detectCorruption(amount, project);
+            // Validate project type
+            if (!marketRates[projectType]) {
+                alert("Please select a valid project type: " + Object.keys(marketRates).join(", "));
+                return;
+            }
+            
+            // Gather all field values from dynamic fields
+            const fieldValues = {};
+            document.querySelectorAll('.project-field').forEach(field => {
+                fieldValues[field.name] = field.value;
+            });
+            
+            // Create a formatted project description
+            let projectDescription = projectType + ": ";
+            const fields = projectFields[projectType];
+            fields.forEach((field, index) => {
+                const value = fieldValues[field.name];
+                projectDescription += `${field.label}: ${value}`;
+                if (index < fields.length - 1) {
+                    projectDescription += ", ";
+                }
+            });
+            
+            // Set the hidden project field with the combined description
+            document.getElementById('project').value = projectDescription;
+            
+            const project = document.getElementById('project').value.trim();
+            const amount = parseFloat(document.getElementById('amount').value);
+            
+            // Check for corruption - using just the project type for rate comparison
+            const corruptionAnalysis = detectCorruption(amount, projectType);
             
             // Display MLA info
             document.getElementById('mlaInfo').innerHTML = `
@@ -495,7 +622,7 @@
             if (corruptionAnalysis.isCorrupt) {
                 document.getElementById('alerts').innerHTML = `
                     <div class="alert alert-danger">
-                        <h3>⚠️Alert!</h3>
+                        <h3>⚠️ Alert!</h3>
                         <p>${corruptionAnalysis.message}</p>
                         <p>Market Rate: ₹${corruptionAnalysis.marketRate.toLocaleString()}</p>
                         <p>Requested Amount: ₹${amount.toLocaleString()}</p>

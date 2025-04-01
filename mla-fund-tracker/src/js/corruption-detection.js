@@ -13,16 +13,33 @@ for (let project in marketRates) {
     standardDeviations[project] = marketRates[project] * 0.20;
 }
 
-// Set placeholder for project input field
-const validProjects = Object.keys(marketRates).join(", ");
-document.getElementById('project').placeholder = `Enter one of: ${validProjects}`;
+// Add jStat library for z-score calculation if it doesn't exist
+if (typeof jStat === 'undefined') {
+    // Simple implementation of z-score calculation
+    const jStat = {
+        zscore: function(x, mean, std) {
+            return (x - mean) / std;
+        }
+    };
+    window.jStat = jStat;
+}
 
 function detectCorruption(amount, project) {
     const marketRate = marketRates[project];
     const stdDev = standardDeviations[project];
 
-    // Calculate z-score using jStat
-    const zScore = jStat.zscore(amount, marketRate, stdDev);
+    if (!marketRate) {
+        console.error("Project type not found:", project);
+        return {
+            isCorrupt: false,
+            marketRate: 0,
+            zScore: 0,
+            message: "Unknown project type"
+        };
+    }
+
+    // Calculate z-score
+    const zScore = (amount - marketRate) / stdDev;
     
     // Round z-score to 2 decimal places
     const roundedZScore = Math.round(zScore * 100) / 100;
