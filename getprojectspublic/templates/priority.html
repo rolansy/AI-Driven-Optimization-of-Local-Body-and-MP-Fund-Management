@@ -82,22 +82,24 @@
             .then(data => {
                 if (data.error) {
                     alert(data.error);
-                } else {
+                } else if (data.project_details) {
                     const rank = data.rank;
                     const score = data.score;
                     const projectDetails = data.project_details;
                     document.getElementById('projectDetails').innerHTML = `
                         <h2>Processed Project Details</h2>
-                        <p><strong>Project Name:</strong> ${projectDetails.Project_Name}</p>
-                        <p><strong>Category:</strong> ${projectDetails.Category}</p>
-                        <p><strong>Estimated Cost (INR):</strong> ${projectDetails.Estimated_Cost}</p>
-                        <p><strong>Start Year:</strong> ${projectDetails.Start_Year}</p>
-                        <p><strong>End Year:</strong> ${projectDetails.End_Year}</p>
-                        <p><strong>Duration (Years):</strong> ${projectDetails.Duration}</p>
+                        <p><strong>Project Name:</strong> ${projectDetails.Project_Name || "Unknown"}</p>
+                        <p><strong>Category:</strong> ${projectDetails.Category || "Unknown"}</p>
+                        <p><strong>Estimated Cost (INR):</strong> ${projectDetails.Estimated_Cost || 0}</p>
+                        <p><strong>Start Year:</strong> ${projectDetails.Start_Year || "Unknown"}</p>
+                        <p><strong>End Year:</strong> ${projectDetails.End_Year || "Unknown"}</p>
+                        <p><strong>Duration (Years):</strong> ${projectDetails.Duration || 0}</p>
                         <p><strong>Priority Score:</strong> ${score}</p>
                         <p><strong>Rank:</strong> ${rank}</p>
                     `;
                     fetchPriorityList();
+                } else {
+                    alert("Failed to process the PDF. No project details were extracted.");
                 }
             })
             .catch(error => {
