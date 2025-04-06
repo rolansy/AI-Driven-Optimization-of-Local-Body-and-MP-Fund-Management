@@ -21,10 +21,10 @@ CORS(app)  # Enable CORS
 #trial
 conversation = []  # Store the chat history
 
-@app.route("/")
+@app.route("/chatbot")
 def home():
     """Render the chatbot UI."""
-    return render_template("index.html")
+    return render_template("chat.html")
 
 @app.route("/chat", methods=["POST"])
 def chat():
